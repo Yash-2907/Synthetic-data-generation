@@ -1,0 +1,5 @@
+# Ignore the entire output folder
+/output/
+
+# Ignore a specific file even if outside the folder
+extended_financial_dataset.csv
