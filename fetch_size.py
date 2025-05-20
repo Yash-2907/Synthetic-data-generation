@@ -9,3 +9,5 @@ size_gb = size_bytes / (1024 ** 3)    # Convert to gigabytes
 print(f"File size: {size_bytes} bytes")
 print(f"File size: {size_mb:.2f} MB")
 print(f"File size: {size_gb:.2f} GB")
+
+# current size is 93.65gb
