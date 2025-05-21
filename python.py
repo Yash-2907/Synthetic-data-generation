@@ -16,7 +16,7 @@ fake = Faker(locales)
 Faker.seed(42)
 
 # Data size config
-total_target_size_bytes = 200 * 1024 ** 3
+total_target_size_bytes = 200 * 1024 ** 9
 row_size_bytes = 6 * 1024
 num_rows = total_target_size_bytes // row_size_bytes
 
