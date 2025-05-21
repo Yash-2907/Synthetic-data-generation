@@ -3,3 +3,5 @@
 
 # Ignore a specific file even if outside the folder
 extended_financial_dataset.csv
+
+/benchmark_test/
