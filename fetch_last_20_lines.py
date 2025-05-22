@@ -24,6 +24,6 @@ def tail_csv_console(file_path, lines=20):
         print(f"{i:2}: {row}")
 
 # --- Change this to your actual file path ---
-file_path = "output/extended_financial_dataset.csv"
+file_path = "benchmark_test/schema_2/schema_two_big.csv"
 
 tail_csv_console(file_path)

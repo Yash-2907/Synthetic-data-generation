@@ -1,170 +1,189 @@
 import csv
-import random
 import os
-from faker import Faker
+import random
 import string
+from faker import Faker
+from datetime import datetime
+from tqdm import tqdm
+import time
 
-# Output directory
-base_dir = os.path.join(os.getcwd(), "benchmark_test", "schema_3", "output")
-os.makedirs(base_dir, exist_ok=True)
-
-# Faker with Thai and Indonesian locales only
+# Setup Faker
 fake = Faker(["th_TH", "id_ID"])
-Faker.seed(3033)
+Faker.seed(2025)
 
-# Config
-num_files = 4999
-min_cols = 15
-max_cols = 25
-min_size = 1 * 1024 * 1024
-max_size = 5 * 1024 * 1024
-estimated_row_size = 500
-email_domains = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com"]
+# Output path
+output_dir = os.path.join(os.getcwd(), "benchmark_test", "schema_2")
+os.makedirs(output_dir, exist_ok=True)
+output_file = os.path.join(output_dir, "schema_two_big.csv")
 
-# Sensitive fields (always include 3–4 per file)
-sensitive_fields = [
-    "Thai_ID", "TIN", "Passport_Number", "Phone_Number", "Email",
-    "Card_Number", "SSN", "Driver_License_Number", "National_Insurance_ID", "Medical_Record_ID"
-]
+num_rows = 4904000
 
-# Full column pool
-field_pool = [
-    "Full_Name", "Date_of_Birth", "Nationality", "Gender", "Region", "City", "Postal_Code",
-    "Device_Type", "Device_OS", "App_Version", "Device_ID", "MAC_Address", "IP_Address",
-    "Session_ID", "Login_Method", "Time_Spent_Minutes", "Session_Abandoned", "Top_Feature_Used",
-    "Scroll_Depth", "Clicks", "Crash_Count", "Page_Visits", "In_App_Purchase", "Consent_Tracking",
-    "Customer_Segment", "Preferred_Channel", "Last_Campaign", "Opted_Into_Offers", "Referral_Code",
-    "Blood_Type", "Allergies", "Chronic_Conditions", "Diagnosis_Code", "Last_Visit_Date", "Insured",
-    "Medical_Record_ID", "Satisfaction_Score", "Feedback_Summary", "Complaint_Status", "Reported_Bugs",
-    "Degree", "Graduation_Year", "Institution_Name", "Field_of_Study", "Work_Email", "HR_ID",
-    "Employer_Name", "Card_Type", "Card_Expiry", "IBAN", "SWIFT_Code", "Currency", "Account_Locked",
-    "Order_ID", "Product_Name", "Product_Price", "Shipping_Country", "Payment_Method", "Discount_Code",
-    "Tracking_ID", "Tax_File_Number"
-]
+# Email domains
+email_domains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com"]
 
-# Generators
+# Helper generators
 def generate_thai_id():
     digits = [random.randint(0, 9) for _ in range(12)]
     total = sum((13 - i) * digit for i, digit in enumerate(digits))
-    check = (11 - total % 11) % 10
-    return f"{digits[0]}-{''.join(map(str, digits[1:5]))}-{''.join(map(str, digits[5:10]))}-{''.join(map(str, digits[10:12]))}-{check}"
+    check_digit = (11 - total % 11) % 10
+    return f"{digits[0]}-{''.join(map(str, digits[1:5]))}-{''.join(map(str, digits[5:10]))}-{''.join(map(str, digits[10:12]))}-{check_digit}"
 
-def generate_passport(): return random.choice(["TH", "ID"]) + ''.join(random.choices(string.digits, k=7))
+def generate_email(name):
+    return f"{name.lower().replace(' ','.')}{random.randint(1,9999)}@{random.choice(email_domains)}"
+
+def generate_wallet(): return '0x' + ''.join(random.choices('0123456789abcdef', k=40))
 def generate_tin(): return str(random.randint(1000000000000, 9999999999999))
-def generate_ssn(): return f"{random.randint(100,999)}-{random.randint(10,99)}-{random.randint(1000,9999)}"
-def generate_driver_license(): return ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
-def generate_insurance_id(): return f"NI-{random.randint(1000000,9999999)}"
-def generate_email(name): return f"{name.lower().replace(' ','.')}{random.randint(1,9999)}@{random.choice(email_domains)}"
-def generate_tracking_id(): return f"TRK{random.randint(1000000000, 9999999999)}"
-def generate_tax_file(): return f"TFN{random.randint(100000,999999)}"
+def random_mac(): return ":".join([f"{random.randint(0, 255):02x}" for _ in range(6)])
 
-# Generate files
-for i in range(1, num_files + 1):
-    file_name = f"table_{i:04d}.csv"
-    file_path = os.path.join(base_dir, file_name)
+# Final columns (80 core + 30+ new)
+columns = [
+    "Customer_ID", "Full_Name", "Gender", "Date_of_Birth", "Nationality",
+    "Thai_ID", "TIN", "Phone_Number", "Email", "Passport_Number",
+    "Address", "City", "Province", "Postal_Code", "Country",
+    "Employment_Status", "Employer_Name", "Monthly_Income", "Monthly_Expenses", "Credit_Score",
+    "KYC_Completed", "KYC_Date", "Account_Number", "Bank_Name", "SWIFT_Code",
+    "IBAN", "Currency", "Account_Type", "Account_Status", "Online_Banking_Enabled",
+    "ATM_Withdrawal_Limit", "Loan_ID", "Loan_Amount", "Loan_Type", "Loan_Status",
+    "Loan_Term_Months", "Loan_Start_Date", "Loan_End_Date", "Loan_Interest_Rate", "Collateral_Details",
+    "Card_ID", "Card_Number", "Card_Type", "Card_Status", "Card_Limit",
+    "Card_Expiry", "CVV", "Card_Issuer", "Billing_Cycle", "Reward_Points",
+    "Transaction_ID", "Transaction_Date", "Transaction_Type", "Transaction_Amount", "Transaction_Currency",
+    "Transaction_Status", "Merchant_Name", "Transaction_Channel", "Device_ID", "Device_OS",
+    "Device_Type", "MAC_Address", "IP_Address", "Login_Timestamp", "Logout_Timestamp",
+    "Browser", "Location", "Login_Method", "Two_Factor_Enabled", "Failed_Login_Attempts",
+    "Security_Question_Set", "Password_Last_Changed", "Crypto_Wallet_Address", "Crypto_Balance", "Crypto_Currency",
+    "Investment_Account_ID", "Investment_Type", "Investment_Amount", "Investment_Return_Rate", "Investment_Currency",
+    "Degree", "Graduation_Year", "Institution_Name", "Field_of_Study", "Work_Email",
+    "Chronic_Conditions", "Diagnosis_Code", "Blood_Type", "Last_Visit_Date", "Insurance_Policy_ID",
+    "Insurance_Type", "Coverage_Amount", "Policy_Status", "Policy_Start_Date", "Policy_End_Date",
+    "Survey_Completed", "Survey_Date", "Feedback_Score", "Feedback_Comments", "Complaint_Status",
+    "Referral_Code", "Preferred_Channel", "Customer_Segment", "Loyalty_Tier", "Loyalty_Join_Date",
+    "Loyalty_Expiry_Date", "Loyalty_Points", "Auto_Renew", "Payment_Method", "Watchlist_Flag"
+]
 
-    n_cols = random.randint(min_cols, max_cols)
-    base_cols = random.sample([f for f in field_pool if f not in sensitive_fields], n_cols - 4)
-    sens_cols = random.sample(sensitive_fields, 4)
-    columns = base_cols + sens_cols
-    random.shuffle(columns)
+# Begin writing
+start = time.time()
+with open(output_file, mode="a", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=columns)
 
-    target_size = random.randint(min_size, max_size)
-    num_rows = target_size // estimated_row_size
+    for i in tqdm(range(int(num_rows)), desc="Generating schema_2 file"):
+        name = fake.name()
+        row = {
+            "Customer_ID": fake.uuid4(),
+            "Full_Name": name,
+            "Gender": random.choice(["Male", "Female", "Other"]),
+            "Date_of_Birth": fake.date_of_birth(minimum_age=18, maximum_age=90),
+            "Nationality": random.choice(["Thai", "Indonesian"]),
+            "Thai_ID": generate_thai_id(),
+            "TIN": generate_tin(),
+            "Phone_Number": fake.phone_number(),
+            "Email": generate_email(name),
+            "Passport_Number": random.choice(["TH", "ID"]) + ''.join(random.choices(string.digits, k=7)),
+            "Address": fake.address(),
+            "City": fake.city(),
+            "Province": fake.state(),
+            "Postal_Code": fake.postcode(),
+            "Country": fake.country(),
+            "Employment_Status": random.choice(["Employed", "Unemployed", "Freelancer"]),
+            "Employer_Name": fake.company(),
+            "Monthly_Income": round(random.uniform(5000, 50000), 2),
+            "Monthly_Expenses": round(random.uniform(3000, 40000), 2),
+            "Credit_Score": random.randint(300, 850),
+            "KYC_Completed": random.choice(["Yes", "No"]),
+            "KYC_Date": fake.date_between(start_date='-5y', end_date='today'),
+            "Account_Number": fake.bban(),
+            "Bank_Name": fake.company(),
+            "SWIFT_Code": fake.swift(),
+            "IBAN": fake.iban(),
+            "Currency": random.choice(["THB", "IDR", "USD"]),
+            "Account_Type": random.choice(["Savings", "Current"]),
+            "Account_Status": random.choice(["Active", "Dormant", "Closed"]),
+            "Online_Banking_Enabled": random.choice(["Yes", "No"]),
+            "ATM_Withdrawal_Limit": random.randint(10000, 100000),
+            "Loan_ID": fake.uuid4(),
+            "Loan_Amount": round(random.uniform(50000, 1000000), 2),
+            "Loan_Type": random.choice(["Home", "Auto", "Personal"]),
+            "Loan_Status": random.choice(["Approved", "Pending", "Rejected"]),
+            "Loan_Term_Months": random.choice([12, 24, 36, 60, 120]),
+            "Loan_Start_Date": fake.date_between(start_date='-5y', end_date='-1y'),
+            "Loan_End_Date": fake.date_between(start_date='-1y', end_date='today'),
+            "Loan_Interest_Rate": round(random.uniform(2.0, 15.0), 2),
+            "Collateral_Details": fake.word(),
+            "Card_ID": fake.uuid4(),
+            "Card_Number": fake.credit_card_number(),
+            "Card_Type": random.choice(["Credit", "Debit"]),
+            "Card_Status": random.choice(["Active", "Blocked", "Expired"]),
+            "Card_Limit": round(random.uniform(10000, 100000), 2),
+            "Card_Expiry": fake.credit_card_expire(),
+            "CVV": random.randint(100, 999),
+            "Card_Issuer": fake.company(),
+            "Billing_Cycle": random.choice(["Monthly", "Quarterly"]),
+            "Reward_Points": random.randint(0, 50000),
+            "Transaction_ID": fake.uuid4(),
+            "Transaction_Date": fake.date_between(start_date='-1y', end_date='today'),
+            "Transaction_Type": random.choice(["Debit", "Credit", "Refund"]),
+            "Transaction_Amount": round(random.uniform(10, 10000), 2),
+            "Transaction_Currency": random.choice(["THB", "USD", "IDR"]),
+            "Transaction_Status": random.choice(["Completed", "Failed", "Pending"]),
+            "Merchant_Name": fake.company(),
+            "Transaction_Channel": random.choice(["Online", "POS", "ATM"]),
+            "Device_ID": fake.uuid4(),
+            "Device_OS": random.choice(["Android", "iOS", "Windows"]),
+            "Device_Type": random.choice(["Mobile", "Tablet", "Desktop"]),
+            "MAC_Address": random_mac(),
+            "IP_Address": fake.ipv4_public(),
+            "Login_Timestamp": fake.date_time_this_year(),
+            "Logout_Timestamp": fake.date_time_this_year(),
+            "Browser": random.choice(["Chrome", "Safari", "Firefox"]),
+            "Location": fake.city(),
+            "Login_Method": random.choice(["Password", "OTP", "Biometric"]),
+            "Two_Factor_Enabled": random.choice(["Yes", "No"]),
+            "Failed_Login_Attempts": random.randint(0, 5),
+            "Security_Question_Set": random.choice(["Yes", "No"]),
+            "Password_Last_Changed": fake.date_this_year(),
+            "Crypto_Wallet_Address": generate_wallet(),
+            "Crypto_Balance": round(random.uniform(0.01, 50.0), 4),
+            "Crypto_Currency": random.choice(["BTC", "ETH", "USDT"]),
+            "Investment_Account_ID": fake.uuid4(),
+            "Investment_Type": random.choice(["Stocks", "Mutual Funds", "Bonds"]),
+            "Investment_Amount": round(random.uniform(1000, 50000), 2),
+            "Investment_Return_Rate": round(random.uniform(2.0, 12.0), 2),
+            "Investment_Currency": random.choice(["USD", "THB"]),
+            "Degree": random.choice(["Bachelors", "Masters", "Diploma"]),
+            "Graduation_Year": random.randint(2000, 2024),
+            "Institution_Name": fake.company() + " University",
+            "Field_of_Study": random.choice(["Finance", "Computer Science", "Nursing"]),
+            "Work_Email": generate_email(name),
+            "Chronic_Conditions": random.choice(["None", "Diabetes", "Asthma"]),
+            "Diagnosis_Code": f"I{random.randint(10,99)}.{random.randint(0,9)}",
+            "Blood_Type": random.choice(["A", "B", "AB", "O"]),
+            "Last_Visit_Date": fake.date_this_year(),
+            "Insurance_Policy_ID": fake.uuid4(),
+            "Insurance_Type": random.choice(["Health", "Life", "Vehicle"]),
+            "Coverage_Amount": round(random.uniform(10000, 500000), 2),
+            "Policy_Status": random.choice(["Active", "Expired", "Cancelled"]),
+            "Policy_Start_Date": fake.date_between(start_date='-3y', end_date='-1y'),
+            "Policy_End_Date": fake.date_between(start_date='-1y', end_date='today'),
+            "Survey_Completed": random.choice(["Yes", "No"]),
+            "Survey_Date": fake.date_this_year(),
+            "Feedback_Score": random.randint(1, 10),
+            "Feedback_Comments": fake.sentence(nb_words=8),
+            "Complaint_Status": random.choice(["Open", "Resolved", "Escalated"]),
+            "Referral_Code": fake.lexify("REF#####"),
+            "Preferred_Channel": random.choice(["Email", "SMS", "App"]),
+            "Customer_Segment": random.choice(["Retail", "Corporate", "SME"]),
+            "Loyalty_Tier": random.choice(["Bronze", "Silver", "Gold", "Platinum"]),
+            "Loyalty_Join_Date": fake.date_between(start_date='-3y', end_date='today'),
+            "Loyalty_Expiry_Date": fake.date_between(start_date='today', end_date='+3y'),
+            "Loyalty_Points": random.randint(0, 10000),
+            "Auto_Renew": random.choice(["Yes", "No"]),
+            "Payment_Method": random.choice(["Card", "Bank", "Wallet"]),
+            "Watchlist_Flag": random.choice(["Yes", "No"])
+        }
 
-    with open(file_path, mode="w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=columns)
-        writer.writeheader()
+        writer.writerow(row)
 
-        for _ in range(num_rows):
-            name = fake.name()
-            row = {
-                "Full_Name": name,
-                "Date_of_Birth": fake.date_of_birth(minimum_age=18, maximum_age=90),
-                "Nationality": random.choice(["Thai", "Indonesian"]),
-                "Gender": random.choice(["Male", "Female", "Other"]),
-                "Phone_Number": fake.phone_number(),
-                "Email": generate_email(name),
-                "Thai_ID": generate_thai_id(),
-                "TIN": generate_tin(),
-                "Passport_Number": generate_passport(),
-                "SSN": generate_ssn(),
-                "Driver_License_Number": generate_driver_license(),
-                "National_Insurance_ID": generate_insurance_id(),
-                "Medical_Record_ID": fake.uuid4(),
-                "Tax_File_Number": generate_tax_file(),
+        if i % 1000 == 0:
+            f.flush()
 
-                # Device / session
-                "Device_Type": random.choice(["Mobile", "Tablet", "Desktop"]),
-                "Device_OS": random.choice(["Android", "iOS", "Windows", "Linux"]),
-                "App_Version": f"{random.randint(1,5)}.{random.randint(0,9)}.{random.randint(0,9)}",
-                "Device_ID": fake.uuid4(),
-                "MAC_Address": ":".join([f"{random.randint(0,255):02x}" for _ in range(6)]),
-                "IP_Address": fake.ipv4_public(),
-                "Session_ID": fake.uuid4(),
-                "Login_Method": random.choice(["Password", "OTP", "Biometric"]),
-                "Time_Spent_Minutes": random.randint(1, 180),
-                "Session_Abandoned": random.choice(["Yes", "No"]),
-                "Top_Feature_Used": random.choice(["Search", "Cart", "Profile"]),
-                "Scroll_Depth": random.choice(["25%", "50%", "75%", "100%"]),
-                "Clicks": random.randint(5, 200),
-                "Crash_Count": random.randint(0, 5),
-                "Page_Visits": random.randint(1, 100),
-                "In_App_Purchase": random.choice(["Yes", "No"]),
-                "Consent_Tracking": random.choice(["Yes", "No"]),
-
-                # Feedback / profile
-                "Satisfaction_Score": round(random.uniform(1.0, 10.0), 1),
-                "Feedback_Summary": fake.sentence(nb_words=5),
-                "Complaint_Status": random.choice(["Open", "Resolved", "Escalated"]),
-                "Reported_Bugs": random.randint(0, 5),
-                "Customer_Segment": random.choice(["Retail", "SMB", "Enterprise"]),
-                "Preferred_Channel": random.choice(["Email", "SMS", "App"]),
-                "Last_Campaign": random.choice(["Q1Launch", "HolidayPromo"]),
-                "Opted_Into_Offers": random.choice(["Yes", "No"]),
-                "Referral_Code": fake.bothify(text='REF###??'),
-
-                # Medical
-                "Blood_Type": random.choice(["A", "B", "AB", "O"]),
-                "Allergies": random.choice(["None", "Peanuts", "Dust", "Pollen"]),
-                "Chronic_Conditions": random.choice(["None", "Diabetes", "Asthma"]),
-                "Diagnosis_Code": f"I{random.randint(10,99)}.{random.randint(0,9)}",
-                "Last_Visit_Date": fake.date_this_year(),
-                "Insured": random.choice(["Yes", "No"]),
-
-                # Education
-                "Degree": random.choice(["Bachelors", "Masters", "Diploma"]),
-                "Graduation_Year": random.randint(2000, 2024),
-                "Institution_Name": fake.company() + " University",
-                "Field_of_Study": random.choice(["Finance", "Computer Science", "Nursing"]),
-                "Work_Email": generate_email(name),
-                "HR_ID": f"HR{random.randint(10000,99999)}",
-
-                # Finance / Orders
-                "Card_Number": fake.credit_card_number(),
-                "Card_Type": random.choice(["Debit", "Credit"]),
-                "Card_Expiry": fake.credit_card_expire(),
-                "IBAN": fake.iban(),
-                "SWIFT_Code": fake.swift(),
-                "Currency": random.choice(["THB", "IDR", "USD"]),
-                "Account_Locked": random.choice(["Yes", "No"]),
-                "Order_ID": fake.uuid4(),
-                "Product_Name": fake.word().title(),
-                "Product_Price": round(random.uniform(10, 500), 2),
-                "Shipping_Country": random.choice(["Thailand", "Indonesia", "Vietnam"]),
-                "Payment_Method": random.choice(["Card", "Wallet", "Cash"]),
-                "Discount_Code": fake.lexify(text="DISC####"),
-                "Tracking_ID": generate_tracking_id(),
-
-                # Location
-                "Region": random.choice(["Bangkok", "Jakarta", "Chiang Mai"]),
-                "City": fake.city(),
-                "Postal_Code": fake.postcode(),
-                "Employer_Name": fake.company()
-            }
-
-            writer.writerow({col: row[col] for col in columns})
-
-    print(f"✅ {file_name} generated with {num_rows} rows")
-
-print("🎉 All 4,999 small tables for schema_3 generated successfully.")
+print("\n✅ Done. File saved at:", output_file)

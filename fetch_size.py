@@ -1,6 +1,6 @@
 import os
 
-file_path = "benchmark_test/schema_1/output/schema_one_big.csv"  # Replace with your actual path
+file_path = "benchmark_test/schema_2/schema_two_big.csv"  # Replace with your actual path
 
 size_bytes = os.path.getsize(file_path)
 size_mb = size_bytes / (1024 * 1024)  # Convert to megabytes
